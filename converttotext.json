@@ -1,0 +1,21 @@
+{
+  "name": "Convert to text",
+  "id_name": "convert-text",
+  "category" : "Clean",
+  "icon": "clean",
+  "description": "Convert columns to text.",
+  "parameters": [
+    {
+      "name": "In columns",
+      "id_name": "source-columns",
+      "type": "multicolumn",
+      "ui-only": true
+    },
+    {
+         "name": "Column Names",
+         "id_name": "colnames",
+         "type": "string",
+         "visible": false
+    }
+  ]
+}
