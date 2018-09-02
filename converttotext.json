@@ -2,7 +2,7 @@
   "name": "Convert to text",
   "id_name": "convert-text",
   "category" : "Clean",
-  "icon": "clean",
+  "icon": "text",
   "description": "Convert columns to text.",
   "parameters": [
     {
