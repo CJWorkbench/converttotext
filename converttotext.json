@@ -2,6 +2,7 @@
   "name": "Convert to text",
   "id_name": "convert-text",
   "category" : "Clean",
+  "help_url":"modules/modules/clean/convert-to-text",
   "icon": "text",
   "description": "Convert columns to text.",
   "parameters": [
