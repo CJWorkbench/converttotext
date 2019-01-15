@@ -4,7 +4,7 @@
   "category" : "Clean",
   "help_url":"modules/clean/convert-to-text",
   "icon": "text",
-  "description": "Convert columns to text.",
+  "description": "Convert columns type to text",
   "parameters": [
     {
       "name": "",
