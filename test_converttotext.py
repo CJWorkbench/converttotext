@@ -1,10 +1,12 @@
 import unittest
+import numpy as np
 import pandas as pd
+from pandas.testing import assert_frame_equal
 from converttotext import render
 import numpy as np
 
-class TestConvertText(unittest.TestCase):
 
+class TestConvertText(unittest.TestCase):
     def setUp(self):
         self.table = pd.DataFrame([
             [99,   100,   '2018', None],
@@ -18,35 +20,39 @@ class TestConvertText(unittest.TestCase):
 
     def test_NOP(self):
         # should NOP when first applied
-        params = {'colnames': ''}
-        out = render(self.table.copy(), params)
-        self.assertTrue(out.equals(self.table))
+        expected = pd.DataFrame({'A': [1, 2]})
+        result = render(expected, {'colnames': ''})
+        self.assertIs(result, expected)
 
-    def test_convert_number(self):
-        colnames = 'intcol,floatcol'
-        params = {'colnames': colnames}
-        out = render(self.table, params)
-        for y in out['intcol']:
-            self.assertTrue(y == '99')
-        # For now, just convert whole floats as-is
-        for y in out['floatcol']:
-            self.assertTrue(y == '100.0')
+    def test_convert_str(self):
+        result = render(pd.DataFrame({'A': ['a', 'b']}), {'colnames': 'A'})
+        expected = pd.DataFrame({'A': ['a', 'b']})
+        assert_frame_equal(result, expected)
+
+    def test_convert_int(self):
+        result = render(pd.DataFrame({'A': [1, 2]}), {'colnames': 'A'})
+        expected = pd.DataFrame({'A': ['1', '2']})
+        assert_frame_equal(result, expected)
+
+    def test_convert_float(self):
+        result = render(pd.DataFrame({'A': [1, 2.1]}), {'colnames': 'A'})
+        expected = pd.DataFrame({'A': ['1.0', '2.1']})
+        assert_frame_equal(result, expected)
 
     def test_convert_datetime(self):
-        colnames = 'datecol'
-        params = {'colnames': colnames}
-        out = render(self.table, params)
-        for y in out['datecol']:
-            self.assertTrue(y == '2018-01-01')
+        result = render(pd.DataFrame({
+            'A': [np.datetime64('2018-01-01'),
+                  np.datetime64('2019-02-13')],
+        }), {'colnames': 'A'})
+        expected = pd.DataFrame({'A': ['2018-01-01', '2019-02-13']})
+        assert_frame_equal(result, expected)
 
     def test_convert_null(self):
-        colnames = 'nullcol'
-        params = {'colnames': colnames}
-        out = render(self.table, params)
-        for y in out['nullcol']:
-            self.assertTrue(y == '')
+        result = render(pd.DataFrame({
+            'A': [1, np.nan]
+        }), {'colnames': 'A'})
+        assert_frame_equal(result, pd.DataFrame({'A': ['1.0', np.nan]}))
+
 
 if __name__ == '__main__':
     unittest.main()
-
-
