@@ -1,24 +1,42 @@
-import numpy as np
+import pyarrow
+from cjwmodule.arrow.format import (format_number_array,
+                                    format_timestamp_array,
+                                    parse_number_format)
 
 
-def render(table, params):
-    # if no column has been selected, return table
-    if not params['colnames']:
-        return table
+def render(arrow_table, params, output_path, *, columns, **kwargs):
+    data = dict(zip(arrow_table.column_names, arrow_table.columns))
+    columns = {c.name: c for c in columns}
+    for colname in params["colnames"]:
+        chunked_array = data[colname]
+        if pyarrow.types.is_integer(chunked_array.type) or pyarrow.types.is_floating(
+            chunked_array.type
+        ):
+            fn = parse_number_format(columns[colname].format)
+            data[colname] = pyarrow.chunked_array(
+                [format_number_array(chunk, fn) for chunk in chunked_array.chunks]
+            )
+        elif pyarrow.types.is_timestamp(chunked_array.type):
+            data[colname] = pyarrow.chunked_array(
+                [format_timestamp_array(chunk) for chunk in chunked_array.chunks]
+            )
+        else:
+            pass
 
-    columns = params['colnames'].split(',')
-    columns = [c.strip() for c in columns]
+    table = pyarrow.table(data)
 
-    # Categories already sanitized to only contain strings
-    non_text_columns = (
-        table[columns]
-        .select_dtypes(exclude=['object', 'category'])
-        .columns
-    )
+    with pyarrow.ipc.RecordBatchFileWriter(output_path, table.schema) as writer:
+        writer.write_table(table)
 
-    na = table[non_text_columns].isna()
-    newdata = table[non_text_columns].astype(str)
-    newdata[na] = np.nan
-    table[non_text_columns] = newdata
+    return []  # No errors, ever
 
-    return table
+
+def _migrate_params_v0_to_v1(params):
+    """v0: colnames is comma-separated str; v1: colnames is str."""
+    return {"colnames": [c for c in params["colnames"].split(",") if c]}
+
+
+def migrate_params(params):
+    if isinstance(params["colnames"], str):
+        params = _migrate_params_v0_to_v1(params)
+    return params

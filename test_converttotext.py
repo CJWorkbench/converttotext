@@ -1,58 +1,120 @@
+import datetime
+import tempfile
 import unittest
-import numpy as np
-import pandas as pd
-from pandas.testing import assert_frame_equal
-from converttotext import render
-import numpy as np
+from pathlib import Path
+from typing import Dict, NamedTuple, Optional
+
+import pyarrow as pa
+from converttotext import migrate_params, render
 
 
-class TestConvertText(unittest.TestCase):
-    def setUp(self):
-        self.table = pd.DataFrame([
-            [99,   100,   '2018', None],
-            [99,   100,   '2018', None]],
-            columns=['intcol', 'floatcol', 'datecol', 'nullcol'])
+class RenderColumn(NamedTuple):
+    name: str
+    type: str = "text"
+    format: Optional[str] = None
 
-        self.table['intcol'] = self.table['intcol'].astype(int)
-        self.table['floatcol'] = self.table['floatcol'].astype(float)
-        self.table['datecol'] = self.table['datecol'].astype(np.datetime64)
-        self.table['nullcol'] = self.table['nullcol'].astype(float)
 
+class MigrateParamsTest(unittest.TestCase):
+    def test_v0_no_colnames(self):
+        self.assertEqual(migrate_params({"colnames": ""}), {"colnames": []})
+
+    def test_v0(self):
+        self.assertEqual(migrate_params({"colnames": "A,B"}), {"colnames": ["A", "B"]})
+
+    def test_v1(self):
+        self.assertEqual(
+            migrate_params({"colnames": ["A", "B"]}), {"colnames": ["A", "B"]}
+        )
+
+
+def call_render(table, params, columns: Dict[str, RenderColumn]) -> pa.Table:
+    with tempfile.NamedTemporaryFile(suffix=".arrow") as tf:
+        output_path = Path(tf.name)
+        errors = render(table, params, output_path, columns=columns)
+        assert errors == []
+        with pa.ipc.open_file(output_path) as reader:
+            return reader.read_all()
+
+
+def assert_arrow_table_equal(actual, expected):
+    if isinstance(expected, dict):
+        expected = pa.table(expected)
+    assert actual.shape == expected.shape
+    assert actual.column_names == expected.column_names
+    assert [c.type for c in actual.columns] == [c.type for c in expected.columns]
+    assert actual.to_pydict() == expected.to_pydict()
+
+
+class RenderTest(unittest.TestCase):
     def test_NOP(self):
         # should NOP when first applied
-        expected = pd.DataFrame({'A': [1, 2]})
-        result = render(expected, {'colnames': ''})
-        self.assertIs(result, expected)
+        result = call_render(
+            pa.table({"A": [0.006]}),
+            {"colnames": []},
+            [RenderColumn("A", "number", "{:.2f}")],
+        )
+        assert_arrow_table_equal(result, {"A": [0.006]})
 
     def test_convert_str(self):
-        result = render(pd.DataFrame({'A': ['a', 'b']}), {'colnames': 'A'})
-        expected = pd.DataFrame({'A': ['a', 'b']})
-        assert_frame_equal(result, expected)
+        result = call_render(
+            pa.table({"A": ["a"]}),
+            {"colnames": ["A"]},
+            [RenderColumn("A", "text", None)],
+        )
+        assert_arrow_table_equal(result, {"A": ["a"]})
 
     def test_convert_int(self):
-        result = render(pd.DataFrame({'A': [1, 2]}), {'colnames': 'A'})
-        expected = pd.DataFrame({'A': ['1', '2']})
-        assert_frame_equal(result, expected)
+        result = call_render(
+            pa.table({"A": [1, 2], "B": [2, 3]}),
+            {"colnames": ["A", "B"]},
+            [
+                RenderColumn("A", "number", "{:.2f}"),
+                RenderColumn("B", "number", "{:d}"),
+            ],
+        )
+        assert_arrow_table_equal(result, {"A": ["1.00", "2.00"], "B": ["2", "3"]})
 
     def test_convert_float(self):
-        result = render(pd.DataFrame({'A': [1, 2.1]}), {'colnames': 'A'})
-        expected = pd.DataFrame({'A': ['1.0', '2.1']})
-        assert_frame_equal(result, expected)
+        result = call_render(
+            pa.table({"A": [1.111], "B": [2.6]}),
+            {"colnames": ["A", "B"]},
+            [
+                RenderColumn("A", "number", "{:.2f}"),
+                RenderColumn("B", "number", "{:d}"),
+            ],
+        )
+        assert_arrow_table_equal(result, {"A": ["1.11"], "B": ["2"]})
+
+    def test_convert_numbers_all_null(self):
+        result = call_render(
+            pa.table({"A": pa.array([None, None], pa.float64())}),
+            {"colnames": ["A"]},
+            [RenderColumn("A", "number", "{:d}")],
+        )
+        assert_arrow_table_equal(result, {"A": pa.array([None, None], pa.utf8())})
 
     def test_convert_datetime(self):
-        result = render(pd.DataFrame({
-            'A': [np.datetime64('2018-01-01'),
-                  np.datetime64('2019-02-13')],
-        }), {'colnames': 'A'})
-        expected = pd.DataFrame({'A': ['2018-01-01', '2019-02-13']})
-        assert_frame_equal(result, expected)
+        result = call_render(
+            pa.table(
+                {
+                    "A": pa.array(
+                        [
+                            datetime.datetime(2018, 1, 2, 3, 4),
+                            datetime.datetime(2020, 1, 2),
+                        ],
+                        pa.timestamp("ns"),
+                    ),
+                },
+            ),
+            {"colnames": ["A"]},
+            [RenderColumn("A", "datetime", None)],
+        )
+        assert_arrow_table_equal(result, {"A": ["2018-01-02T03:04Z", "2020-01-02"]})
 
     def test_convert_null(self):
-        result = render(pd.DataFrame({
-            'A': [1, np.nan]
-        }), {'colnames': 'A'})
-        assert_frame_equal(result, pd.DataFrame({'A': ['1.0', np.nan]}))
-
-
-if __name__ == '__main__':
-    unittest.main()
+        result = call_render(
+            pa.table({"A": [1, None]}),
+            {"colnames": ["A"]},
+            [RenderColumn("A", "number", "{:,d}")],
+        )
+        assert_arrow_table_equal(result, {"A": ["1", None]})
