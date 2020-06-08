@@ -12,7 +12,7 @@ def render(arrow_table, params, output_path, *, columns, **kwargs):
         if pyarrow.types.is_integer(chunked_array.type) or pyarrow.types.is_floating(
             chunked_array.type
         ):
-            fn = parse_number_format(columns[colname].format)
+            fn = parse_number_format(columns[colname].type.format)
             data[colname] = pyarrow.chunked_array(
                 [format_number_array(chunk, fn) for chunk in chunked_array.chunks]
             )
