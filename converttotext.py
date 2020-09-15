@@ -1,7 +1,9 @@
 import pyarrow
-from cjwmodule.arrow.format import (format_number_array,
-                                    format_timestamp_array,
-                                    parse_number_format)
+from cjwmodule.arrow.format import (
+    format_number_array,
+    format_timestamp_array,
+    parse_number_format,
+)
 
 
 def render(arrow_table, params, output_path, *, columns, **kwargs):
