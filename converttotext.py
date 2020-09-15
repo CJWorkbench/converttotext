@@ -16,11 +16,13 @@ def render(arrow_table, params, output_path, *, columns, **kwargs):
         ):
             fn = parse_number_format(columns[colname].type.format)
             data[colname] = pyarrow.chunked_array(
-                [format_number_array(chunk, fn) for chunk in chunked_array.chunks]
+                [format_number_array(chunk, fn) for chunk in chunked_array.chunks],
+                pyarrow.utf8(),
             )
         elif pyarrow.types.is_timestamp(chunked_array.type):
             data[colname] = pyarrow.chunked_array(
-                [format_timestamp_array(chunk) for chunk in chunked_array.chunks]
+                [format_timestamp_array(chunk) for chunk in chunked_array.chunks],
+                pyarrow.utf8(),
             )
         else:
             pass

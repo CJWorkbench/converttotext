@@ -104,6 +104,22 @@ class RenderTest(unittest.TestCase):
         )
         assert_arrow_table_equal(result, {"A": pa.array([None, None], pa.utf8())})
 
+    def test_convert_numbers_no_arrays(self):
+        result = call_render(
+            pa.table({"A": pa.chunked_array([], pa.int64())}),
+            {"colnames": ["A"]},
+            [RenderColumn("A", NumberType("{:d}"))],
+        )
+        assert_arrow_table_equal(result, {"A": pa.chunked_array([], pa.utf8())})
+
+    def test_convert_timestamps_no_arrays(self):
+        result = call_render(
+            pa.table({"A": pa.chunked_array([], pa.timestamp("ns"))}),
+            {"colnames": ["A"]},
+            [RenderColumn("A", DatetimeType())],
+        )
+        assert_arrow_table_equal(result, {"A": pa.chunked_array([], pa.utf8())})
+
     def test_convert_datetime(self):
         result = call_render(
             pa.table(
