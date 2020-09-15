@@ -2,16 +2,27 @@ import datetime
 import tempfile
 import unittest
 from pathlib import Path
-from typing import Dict, NamedTuple, Optional
+from typing import Dict, NamedTuple, Optional, Union
 
 import pyarrow as pa
 from converttotext import migrate_params, render
 
 
+class DatetimeType(NamedTuple):
+    pass
+
+
+class NumberType(NamedTuple):
+    format: str
+
+
+class TextType(NamedTuple):
+    pass
+
+
 class RenderColumn(NamedTuple):
     name: str
-    type: str = "text"
-    format: Optional[str] = None
+    type: Union[DatetimeType, NumberType, TextType]
 
 
 class MigrateParamsTest(unittest.TestCase):
@@ -51,7 +62,7 @@ class RenderTest(unittest.TestCase):
         result = call_render(
             pa.table({"A": [0.006]}),
             {"colnames": []},
-            [RenderColumn("A", "number", "{:.2f}")],
+            [RenderColumn("A", NumberType("{:.2f}"))],
         )
         assert_arrow_table_equal(result, {"A": [0.006]})
 
@@ -59,7 +70,7 @@ class RenderTest(unittest.TestCase):
         result = call_render(
             pa.table({"A": ["a"]}),
             {"colnames": ["A"]},
-            [RenderColumn("A", "text", None)],
+            [RenderColumn("A", TextType())],
         )
         assert_arrow_table_equal(result, {"A": ["a"]})
 
@@ -68,8 +79,8 @@ class RenderTest(unittest.TestCase):
             pa.table({"A": [1, 2], "B": [2, 3]}),
             {"colnames": ["A", "B"]},
             [
-                RenderColumn("A", "number", "{:.2f}"),
-                RenderColumn("B", "number", "{:d}"),
+                RenderColumn("A", NumberType("{:.2f}")),
+                RenderColumn("B", NumberType("{:d}")),
             ],
         )
         assert_arrow_table_equal(result, {"A": ["1.00", "2.00"], "B": ["2", "3"]})
@@ -79,8 +90,8 @@ class RenderTest(unittest.TestCase):
             pa.table({"A": [1.111], "B": [2.6]}),
             {"colnames": ["A", "B"]},
             [
-                RenderColumn("A", "number", "{:.2f}"),
-                RenderColumn("B", "number", "{:d}"),
+                RenderColumn("A", NumberType("{:.2f}")),
+                RenderColumn("B", NumberType("{:d}")),
             ],
         )
         assert_arrow_table_equal(result, {"A": ["1.11"], "B": ["2"]})
@@ -89,7 +100,7 @@ class RenderTest(unittest.TestCase):
         result = call_render(
             pa.table({"A": pa.array([None, None], pa.float64())}),
             {"colnames": ["A"]},
-            [RenderColumn("A", "number", "{:d}")],
+            [RenderColumn("A", NumberType("{:d}"))],
         )
         assert_arrow_table_equal(result, {"A": pa.array([None, None], pa.utf8())})
 
@@ -107,7 +118,7 @@ class RenderTest(unittest.TestCase):
                 },
             ),
             {"colnames": ["A"]},
-            [RenderColumn("A", "datetime", None)],
+            [RenderColumn("A", DatetimeType())],
         )
         assert_arrow_table_equal(result, {"A": ["2018-01-02T03:04Z", "2020-01-02"]})
 
@@ -115,6 +126,6 @@ class RenderTest(unittest.TestCase):
         result = call_render(
             pa.table({"A": [1, None]}),
             {"colnames": ["A"]},
-            [RenderColumn("A", "number", "{:,d}")],
+            [RenderColumn("A", NumberType("{:,d}"))],
         )
         assert_arrow_table_equal(result, {"A": ["1", None]})
