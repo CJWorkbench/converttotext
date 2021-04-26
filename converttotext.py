@@ -1,38 +1,45 @@
-import pyarrow
+import pyarrow as pa
 from cjwmodule.arrow.format import (
+    format_date_array,
     format_number_array,
     format_timestamp_array,
     parse_number_format,
 )
+from cjwmodule.arrow.types import ArrowRenderResult
 
 
-def render(arrow_table, params, output_path, *, columns, **kwargs):
-    data = dict(zip(arrow_table.column_names, arrow_table.columns))
-    columns = {c.name: c for c in columns}
-    for colname in params["colnames"]:
-        chunked_array = data[colname]
-        if pyarrow.types.is_integer(chunked_array.type) or pyarrow.types.is_floating(
-            chunked_array.type
-        ):
-            fn = parse_number_format(columns[colname].type.format)
-            data[colname] = pyarrow.chunked_array(
-                [format_number_array(chunk, fn) for chunk in chunked_array.chunks],
-                pyarrow.utf8(),
-            )
-        elif pyarrow.types.is_timestamp(chunked_array.type):
-            data[colname] = pyarrow.chunked_array(
-                [format_timestamp_array(chunk) for chunk in chunked_array.chunks],
-                pyarrow.utf8(),
-            )
-        else:
-            pass
+def format_chunked_array(
+    chunked_array: pa.ChunkedArray, field: pa.Field
+) -> pa.ChunkedArray:
+    if pa.types.is_integer(field.type) or pa.types.is_floating(field.type):
+        nf = parse_number_format(field.metadata[b"format"].decode("utf-8"))
+        format_array = lambda chunk: format_number_array(chunk, nf)
+    elif pa.types.is_timestamp(field.type):
+        format_array = format_timestamp_array
+    elif pa.types.is_date32(field.type):
+        format_array = lambda chunk: format_date_array(
+            chunk, field.metadata[b"unit"].decode("utf-8")
+        )
+    else:
+        format_array = lambda chunk: chunk
 
-    table = pyarrow.table(data)
+    return pa.chunked_array(
+        [format_array(chunk) for chunk in chunked_array.chunks], pa.utf8()
+    )
 
-    with pyarrow.ipc.RecordBatchFileWriter(output_path, table.schema) as writer:
-        writer.write_table(table)
 
-    return []  # No errors, ever
+def render_arrow_v1(table: pa.Table, params, **kwargs):
+    todo = frozenset(params["colnames"])
+
+    for i, colname in enumerate(table.column_names):
+        if colname not in todo:
+            continue
+
+        table = table.set_column(
+            i, colname, format_chunked_array(table.column(i), table.schema.field(i))
+        )
+
+    return ArrowRenderResult(table)
 
 
 def _migrate_params_v0_to_v1(params):
