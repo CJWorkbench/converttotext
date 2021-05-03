@@ -125,3 +125,13 @@ def test_convert_timestamp():
             make_table(make_column("A", ["2018-01-02T03:04Z", "2020-01-02", None]))
         ),
     )
+
+
+def test_dictionary_no_op():
+    assert_result_equals(
+        render(
+            make_table(make_column("A", ["a", "b"], dictionary=True)),
+            P(colnames=["A"]),
+        ),
+        ArrowRenderResult(make_table(make_column("A", ["a", "b"], dictionary=True))),
+    )

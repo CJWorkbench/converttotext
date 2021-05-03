@@ -21,7 +21,7 @@ def format_chunked_array(
             chunk, field.metadata[b"unit"].decode("utf-8")
         )
     else:
-        format_array = lambda chunk: chunk
+        return chunked_array  # pa.utf8() or pa.dictionary() of pa.utf8()
 
     return pa.chunked_array(
         [format_array(chunk) for chunk in chunked_array.chunks], pa.utf8()
