@@ -1,4 +1,5 @@
 .eggs/
 .tox/
+.coverage
 __pycache__/
 *.egg-info/
